@@ -1,0 +1,9 @@
+<routes xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="http://sumo.dlr.de/xsd/routes_file.xsd">
+    <vType id="car" accel="2.0" decel="4.5" sigma="0.5" length="5.0" minGap="2.5" maxSpeed="50.0"/>
+    <vType id="ambulance" accel="3.0" decel="6.0" sigma="0.5" length="6.0" minGap="2.5" maxSpeed="60.0"/>
+
+    <flow id="flow_n1_n2" type="car" begin="0" end="3600" from="e1" to="e2" probability="0.1"/>
+    <flow id="flow_n3_n4" type="car" begin="0" end="3600" from="e3" to="e4" probability="0.1"/>
+    <flow id="flow_n4_n3" type="car" begin="0" end="3600" from="e5" to="e6" probability="0.1"/>
+    <flow id="flow_n2_n1" type="car" begin="0" end="3600" from="e7" to="e8" probability="0.1"/>
+</routes>
