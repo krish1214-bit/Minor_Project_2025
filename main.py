@@ -1,65 +1,71 @@
-import time
-import traci
-from vehicle_detection import detect_vehicles
+import cv2
+from vehicle_detection import find_vehicles_in_frame
 from ai_decision_engine import calculate_green_timings
-from sumo_integration import launch_sumo_simulation, get_current_vehicle_counts, update_traffic_light_timings, \
-    end_sumo_simulation
+import os
 
-# The path to your SUMO configuration file. You'll need to make sure this is correct.
-SUMO_CONFIG_FILE = "sumo_config/basic_sumo.sumocfg"
+# To test with a video file, replace the path below. For webcam, use 0.
+# For a single image, provide the image path.
+#SOURCE = "path/to/your/test_video.mp4"
 
-# IDs for the traffic light and lanes we'll be monitoring. These need to match
-# the IDs defined in your SUMO XML files.
-TRAFFIC_LIGHT_ID = "0"
-LANE_IDS = ["lane_id_1", "lane_id_2"]  # Placeholder lane IDs
+
+# SOURCE = 0  # Use this for a live webcam feed
+SOURCE = r""C:\Users\Krish Setiya\Downloads\sample image.png""
+
+def draw_detection_results(frame, vehicle_boxes, vehicle_count):
+    """
+    Draws bounding boxes and a vehicle count on the frame.
+    This is a helper function for visualizing the results.
+    """
+    for box in vehicle_boxes:
+        # Drawing a rectangle for each detected vehicle.
+        # The coordinates are [x_min, y_min, x_max, y_max].
+        x1, y1, x2, y2 = box
+        cv2.rectangle(frame, (x1, y1), (x2, y2), (0, 255, 0), 2)  # Green box
+
+    # Displaying the vehicle count on the top-left corner.
+    cv2.putText(frame, f"Vehicle Count: {vehicle_count}", (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 255),
+                2)  # Red text
 
 
 def main():
-    try:
-        launch_sumo_simulation(SUMO_CONFIG_FILE)
+    if isinstance(SOURCE, str) and os.path.isfile(SOURCE) and SOURCE.endswith(('.jpg', '.jpeg', '.png')):
+        # --- Handle single image input ---
+        frame = cv2.imread(SOURCE)
+        if frame is None:
+            print("Error: Could not read image.")
+            return
 
-        # This is our main simulation loop. It's designed to mimic a real-world
-        # traffic control system, stepping through time and making decisions.
+        vehicle_count, vehicle_boxes = find_vehicles_in_frame(frame)
+        draw_detection_results(frame, vehicle_boxes, vehicle_count)
 
-        step_counter = 0
-        while traci.simulation.getMinExpectedNumber() > 0:
-            traci.simulationStep()
-            step_counter += 1
+        cv2.imshow("Smart Traffic Light - Detection Test", frame)
+        cv2.waitKey(0)
+        cv2.destroyAllWindows()
 
-            # Here's where the magic happens! In a real-world project, you'd
-            # connect to a live camera feed and use a model like YOLO to count
-            # the vehicles. For this simulation, we're using TraCI's built-in
-            # function to get the vehicle counts.
-            # (e.g., using a video feed placeholder:
-            # ret, frame = cap.read()
-            # if ret:
-            #     vehicle_count_lane1, _ = detect_vehicles(frame) )
+    else:
+        # --- Handle video or webcam input ---
+        cap = cv2.VideoCapture(SOURCE)
+        if not cap.isOpened():
+            print("Error: Could not open video source.")
+            return
 
-            current_vehicle_counts = get_current_vehicle_counts(LANE_IDS)
+        while True:
+            ret, frame = cap.read()
+            if not ret:
+                print("End of video stream or error.")
+                break
 
-            # Pass the live data to our smart decision-making function.
-            new_timings = calculate_green_timings(current_vehicle_counts)
+            vehicle_count, vehicle_boxes = find_vehicles_in_frame(frame)
+            draw_detection_results(frame, vehicle_boxes, vehicle_count)
 
-            # Now, we apply the new timings to the traffic lights in the simulation.
-            # This is a simplified two-phase example. For a more complex intersection,
-            # you'd need a more robust phase management system (e.g., handling yellow lights).
-            update_traffic_light_timings(TRAFFIC_LIGHT_ID, new_timings[LANE_IDS[0]], "GGrr")
-            update_traffic_light_timings(TRAFFIC_LIGHT_ID, new_timings[LANE_IDS[1]], "rGGr")
+            cv2.imshow("Smart Traffic Light - Detection Test", frame)
 
-            # A friendly log message to keep track of what's happening.
-            print(
-                f"Time Step: {step_counter} | Traffic Update: Lane counts are {current_vehicle_counts}. New green light durations are {new_timings}.")
+            # Press 'q' to exit the video stream.
+            if cv2.waitKey(1) & 0xFF == ord('q'):
+                break
 
-            # Pausing for a moment to make the simulation visible and easier to follow.
-            time.sleep(1)
-
-
-    except traci.exceptions.TraCIException as e:
-        print(
-            f"An error occurred with TraCI. Did you make sure SUMO is installed and the path is correct? Error details: {e}")
-    finally:
-        # Always remember to close the simulation gracefully!
-        end_sumo_simulation()
+        cap.release()
+        cv2.destroyAllWindows()
 
 
 if __name__ == "__main__":
