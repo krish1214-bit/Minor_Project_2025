@@ -1,71 +1,66 @@
 import cv2
-from vehicle_detection import find_vehicles_in_frame
-from ai_decision_engine import calculate_green_timings
-import os
+from vehicle_detection import find_vehicles_in_frame  # Assumes your YOLO wrapper is in vehicle_detection.py
 
-# To test with a video file, replace the path below. For webcam, use 0.
-# For a single image, provide the image path.
-#SOURCE = "path/to/your/test_video.mp4"
+IMAGE_PATH = r"C:\Users\Krish Setiya\Downloads\sample image.png"
 
+# divide into ROIs 
+LANE_ROIS = [
+    (0, 0, 213, 480),     # Lane 1 (left)
+    (213, 0, 427, 480),   # Lane 2 (center)
+    (427, 0, 640, 480)    # Lane 3 (right)
+]
 
-# SOURCE = 0  # Use this for a live webcam feed
-SOURCE = r""C:\Users\Krish Setiya\Downloads\sample image.png""
+MIN_GREEN_DURATION = 5
+MAX_GREEN_DURATION = 15
+MAX_VEHICLE_COUNT = 20
 
-def draw_detection_results(frame, vehicle_boxes, vehicle_count):
-    """
-    Draws bounding boxes and a vehicle count on the frame.
-    This is a helper function for visualizing the results.
-    """
-    for box in vehicle_boxes:
-        # Drawing a rectangle for each detected vehicle.
-        # The coordinates are [x_min, y_min, x_max, y_max].
-        x1, y1, x2, y2 = box
-        cv2.rectangle(frame, (x1, y1), (x2, y2), (0, 255, 0), 2)  # Green box
-
-    # Displaying the vehicle count on the top-left corner.
-    cv2.putText(frame, f"Vehicle Count: {vehicle_count}", (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 255),
-                2)  # Red text
-
+def calculate_green_duration(vehicle_count):
+    duration = MIN_GREEN_DURATION + (MAX_GREEN_DURATION - MIN_GREEN_DURATION) * (vehicle_count / MAX_VEHICLE_COUNT)
+    return max(MIN_GREEN_DURATION, min(duration, MAX_GREEN_DURATION))
 
 def main():
-    if isinstance(SOURCE, str) and os.path.isfile(SOURCE) and SOURCE.endswith(('.jpg', '.jpeg', '.png')):
-        # --- Handle single image input ---
-        frame = cv2.imread(SOURCE)
-        if frame is None:
-            print("Error: Could not read image.")
-            return
+    frame = cv2.imread(IMAGE_PATH)
+    if frame is None:
+        print("Error: Could not read the image.")
+        return
 
-        vehicle_count, vehicle_boxes = find_vehicles_in_frame(frame)
-        draw_detection_results(frame, vehicle_boxes, vehicle_count)
+    vehicle_counts = []
+    vehicle_boxes_per_lane = []
 
-        cv2.imshow("Smart Traffic Light - Detection Test", frame)
-        cv2.waitKey(0)
-        cv2.destroyAllWindows()
+    # Vehicle detection for each lane
+    for (x1, y1, x2, y2) in LANE_ROIS:
+        roi = frame[y1:y2, x1:x2]
+        count, boxes = find_vehicles_in_frame(roi)
+        boxes = [[b[0] + x1, b[1] + y1, b[2] + x1, b[3] + y1] for b in boxes]
+        vehicle_counts.append(count)
+        vehicle_boxes_per_lane.append(boxes)
 
-    else:
-        # --- Handle video or webcam input ---
-        cap = cv2.VideoCapture(SOURCE)
-        if not cap.isOpened():
-            print("Error: Could not open video source.")
-            return
+    green_lane_index = vehicle_counts.index(max(vehicle_counts)) if vehicle_counts else -1
+    green_durations = [calculate_green_duration(count) for count in vehicle_counts]
 
-        while True:
-            ret, frame = cap.read()
-            if not ret:
-                print("End of video stream or error.")
-                break
+    for lane_index, boxes in enumerate(vehicle_boxes_per_lane):
+        box_color = (0, 255, 0) if lane_index == green_lane_index else (0, 0, 255)
 
-            vehicle_count, vehicle_boxes = find_vehicles_in_frame(frame)
-            draw_detection_results(frame, vehicle_boxes, vehicle_count)
+        for box in boxes:
+            cv2.rectangle(frame, (box[0], box[1]), (box[2], box[3]), box_color, 2)
 
-            cv2.imshow("Smart Traffic Light - Detection Test", frame)
+        signal_text = "GREEN" if lane_index == green_lane_index else "RED"
+        duration_text = f"{green_durations[lane_index]:.1f}s" if lane_index == green_lane_index else ""
+        cv2.putText(frame, f"{signal_text} {duration_text} Vehicles: {vehicle_counts[lane_index]}",
+                    (30, 50 + lane_index * 40), cv2.FONT_HERSHEY_SIMPLEX, 0.9, box_color, 2)
 
-            # Press 'q' to exit the video stream.
-            if cv2.waitKey(1) & 0xFF == ord('q'):
-                break
+    cv2.imshow("Smart Traffic Light - Lane Density and Timings", frame)
+    cv2.waitKey(0)
+    cv2.destroyAllWindows()
 
-        cap.release()
-        cv2.destroyAllWindows()
+    # After detection and visualization
+    print("\n================= TRAFFIC DENSITY REPORT =================")
+    for idx, duration in enumerate(green_durations):
+        if idx == green_lane_index:
+            print(f"Lane {idx + 1}: {vehicle_counts[idx]} vehicles → GREEN for {duration:.1f} seconds")
+        else:
+            print(f"Lane {idx + 1}: {vehicle_counts[idx]} vehicles → RED")
+    print("==========================================================\n")
 
 
 if __name__ == "__main__":
