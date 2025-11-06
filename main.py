@@ -1,5 +1,5 @@
 import cv2
-from vehicle_detection import find_vehicles_in_frame  # Assumes your YOLO wrapper is in vehicle_detection.py
+from vehicle_detection import find_vehicles_in_frame 
 
 IMAGE_PATH = r"C:\Users\Krish Setiya\Downloads\sample image.png"
 
@@ -65,3 +65,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+
